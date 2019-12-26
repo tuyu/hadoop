@@ -144,38 +144,38 @@ public class AbstractPreemptableResourceCalculator {
         tqComparator);
     for (Iterator<TempQueuePerPartition> i = qAlloc.iterator(); i.hasNext(); ) {
       TempQueuePerPartition q = i.next();
-      Resource used = q.getUsed();
+      Resource used = q.getUsed(); //获取当前队列使用量
 
       Resource initIdealAssigned;
-      if (Resources.greaterThan(rc, totGuarant, used, q.getGuaranteed())) {
+      if (Resources.greaterThan(rc, totGuarant, used, q.getGuaranteed())) { //使用量大于保障量
         initIdealAssigned = Resources.add(
             Resources.componentwiseMin(q.getGuaranteed(), q.getUsed()),
-            q.untouchableExtra);
+            q.untouchableExtra); //q.untouchableExtra 为禁止抢占队列中 used - guaranteed，这里这一步应该还考虑了 totGuarant 的情况
       } else{
-        initIdealAssigned = Resources.clone(used);
+        initIdealAssigned = Resources.clone(used); //当前使用量，说明这里没有超过资源保障值
       }
 
       // perform initial assignment
-      initIdealAssignment(totGuarant, q, initIdealAssigned);
+      initIdealAssignment(totGuarant, q, initIdealAssigned); //设置对应队列的 q.idealAssigned
 
-      Resources.subtractFrom(unassigned, q.idealAssigned);
+      Resources.subtractFrom(unassigned, q.idealAssigned); //上一层的保障量减去当前被 assign 的资源，之后检测其他队列
 
       // If idealAssigned < (allocated + used + pending), q needs more
       // resources, so
       // add it to the list of underserved queues, ordered by need.
-      Resource curPlusPend = Resources.add(q.getUsed(), q.pending);
-      if (Resources.lessThan(rc, totGuarant, q.idealAssigned, curPlusPend)) {
-        orderedByNeed.add(q);
+      Resource curPlusPend = Resources.add(q.getUsed(), q.pending); //将需求量添加到一个队列中，如果最后计算有 totGuarant 冗余再进行分配
+      if (Resources.lessThan(rc, totGuarant, q.idealAssigned, curPlusPend)) { //如果
+        orderedByNeed.add(q); //这里记录的是需求量大于以分配的资源量的队列
       }
     }
 
     // assign all cluster resources until no more demand, or no resources are
     // left
     while (!orderedByNeed.isEmpty() && Resources.greaterThan(rc, totGuarant,
-        unassigned, Resources.none())) {
+        unassigned, Resources.none())) { //剩余的 unassigned 的资源需要在分配给有需求的队列
       // we compute normalizedGuarantees capacity based on currently active
       // queues
-      resetCapacity(unassigned, orderedByNeed, ignoreGuarantee);
+      resetCapacity(unassigned, orderedByNeed, ignoreGuarantee); //计算各个队列的 capacity 的 normalizedGuarantee，计算每种资源的占整个 capacity 的权重
 
       // For each underserved queue (or set of queues if multiple are equally
       // underserved), offer its share of the unassigned resources based on its
@@ -184,7 +184,7 @@ public class AbstractPreemptableResourceCalculator {
       // in the order of most under-guaranteed to most over-guaranteed. In this
       // way, the most underserved queue(s) are always given resources first.
       Collection<TempQueuePerPartition> underserved = getMostUnderservedQueues(
-          orderedByNeed, tqComparator);
+          orderedByNeed, tqComparator); //通过 ideaAssign 选择当前分配资源比例最小的队列作为需求量最大进行检测
 
       // This value will be used in every round to calculate ideal allocation.
       // So make a copy to avoid it changed during calculation.
@@ -192,7 +192,7 @@ public class AbstractPreemptableResourceCalculator {
 
       for (Iterator<TempQueuePerPartition> i = underserved.iterator(); i
           .hasNext();) {
-        if (!rc.isAnyMajorResourceAboveZero(unassigned)) {
+        if (!rc.isAnyMajorResourceAboveZero(unassigned)) { //是否所有资源中有一个是大于 0 的
           break;
         }
 
@@ -201,23 +201,23 @@ public class AbstractPreemptableResourceCalculator {
         // How much resource we offer to the queue (to increase its ideal_alloc
         Resource wQavail = Resources.multiplyAndNormalizeUp(rc,
             dupUnassignedForTheRound,
-            sub.normalizedGuarantee, this.stepFactor);
+            sub.normalizedGuarantee, this.stepFactor); //通过之前计算的队列每个资源所占整体队列容量保障的比例计算可以给出的资源
 
         // Make sure it is not beyond unassigned
         wQavail = Resources.componentwiseMin(wQavail, unassigned);
 
         Resource wQidle = sub.offer(wQavail, rc, totGuarant,
             isReservedPreemptionCandidatesSelector,
-            allowQueuesBalanceAfterAllQueuesSatisfied);
+            allowQueuesBalanceAfterAllQueuesSatisfied); //判断资源是否可以 offer，这里还需要详细看看
         Resource wQdone = Resources.subtract(wQavail, wQidle);
 
         if (Resources.greaterThan(rc, totGuarant, wQdone, Resources.none())) {
           // The queue is still asking for more. Put it back in the priority
           // queue, recalculating its order based on need.
-          orderedByNeed.add(sub);
+          orderedByNeed.add(sub); //继续放回去，继续进行计算
         }
 
-        Resources.subtractFrom(unassigned, wQdone);
+        Resources.subtractFrom(unassigned, wQdone); //减去已分配的资源
 
         // Make sure unassigned is always larger than 0
         unassigned = Resources.componentwiseMax(unassigned, Resources.none());
@@ -296,7 +296,7 @@ public class AbstractPreemptableResourceCalculator {
   // Take the most underserved TempQueue (the one on the head). Collect and
   // return the list of all queues that have the same idealAssigned
   // percentage of guaranteed.
-  private Collection<TempQueuePerPartition> getMostUnderservedQueues(
+  private Collection<TempQueuePerPartition> getMostUnderservedQueues( // orderedByNeed 已经对 need 进行了排序，剩下的是需要对 guaranteed  较小的进行返回
       PriorityQueue<TempQueuePerPartition> orderedByNeed,
       TQComparator tqComparator) {
     ArrayList<TempQueuePerPartition> underserved = new ArrayList<>();
